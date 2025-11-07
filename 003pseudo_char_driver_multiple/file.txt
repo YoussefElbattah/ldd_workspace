@@ -1,0 +1,24 @@
+#include <linux/module.h>
+#include <linux/fs.h>
+#include <linux/cdev.h>
+#include <linux/device.h>
+#include <linux/kdev_t.h>
+#include <linux/uaccess.h>
+
+#define MEM_SIZE_MAX_PCDEV1 512
+#define MEM_SIZE_MAX_PCDEV2 1024
+#define MEM_SIZE_MAX_PCDEV3 512
+#define MEM_SIZE_MAX_PCDEV4 1024
+
+
+#define RDONLY 0x01
+#define WRONLY 0x10
+#define RDWR 0x11
+
+
+#define NO_DEVICES	4
+#undef pr_fmt
+#define pr_fmt(fmt) "%s :" fmt , __func__
+/* pseudo device's memory */
+char device_buffer_pcdev1[MEM_SIZE_MAX_PCDEV1];
+char device_bu
