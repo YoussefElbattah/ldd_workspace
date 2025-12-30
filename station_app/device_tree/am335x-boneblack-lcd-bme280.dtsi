@@ -1,0 +1,58 @@
+/{
+	lcd_16x2 {
+		compatible = "org,bone-lcd";
+                pinctrl-single,names = "default";
+                pinctrl-0 = <&lcd_pinctrl>;
+		status = "okay";
+		rs-gpios = <&gpio2 2 GPIO_ACTIVE_HIGH>;
+		rw-gpios = <&gpio2 3 GPIO_ACTIVE_HIGH>;
+		en-gpios = <&gpio2 4 GPIO_ACTIVE_HIGH>;
+		d4-gpios = <&gpio1 12 GPIO_ACTIVE_HIGH>;
+		d5-gpios = <&gpio0 26 GPIO_ACTIVE_HIGH>;
+		d6-gpios = <&gpio1 14 GPIO_ACTIVE_HIGH>;
+		d7-gpios = <&gpio0 27 GPIO_ACTIVE_HIGH>;
+	};
+
+};//root node
+
+&i2c1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c1_pins>;
+
+	status = "okay";
+	clock-frequency = <100000>;
+
+	bme280: bme280@76 {
+		compatible = "bosch,bme280";
+		reg = <0x76>;
+	};
+};
+
+&am33xx_pinmux {
+	lcd_pinctrl: bone_gpios { 
+		pinctrl-single,pins = <
+				AM33XX_PADCONF(AM335X_PIN_GPMC_ADVN_ALE, PIN_OUTPUT, MUX_MODE7)
+				AM33XX_PADCONF(AM335X_PIN_GPMC_OEN_REN, PIN_OUTPUT, MUX_MODE7)
+				AM33XX_PADCONF(AM335X_PIN_GPMC_WEN, PIN_OUTPUT, MUX_MODE7)
+				AM33XX_PADCONF(AM335X_PIN_GPMC_AD12, PIN_OUTPUT, MUX_MODE7)
+				AM33XX_PADCONF(AM335X_PIN_GPMC_AD10, PIN_OUTPUT, MUX_MODE7)
+				AM33XX_PADCONF(AM335X_PIN_GPMC_AD14, PIN_OUTPUT, MUX_MODE7)
+				AM33XX_PADCONF(AM335X_PIN_GPMC_AD11, PIN_OUTPUT, MUX_MODE7)
+		>;
+
+	};
+	
+	i2c1_pins: i2c1-pins {
+		pinctrl-single,pins = <
+			AM33XX_PADCONF(AM335X_PIN_SPI0_D1, PIN_INPUT_PULLUP, MUX_MODE2)		/* spi0_d1.i2c1_sda */
+			AM33XX_PADCONF(AM335X_PIN_SPI0_CS0, PIN_INPUT_PULLUP, MUX_MODE2)	/* spi0_cs0.i2c1_scl */
+		>;
+	};
+	
+
+};
+
+&tda19988 {
+	status = "disabled";
+};
+
