@@ -1,0 +1,13 @@
+/dts-v1/;
+/plugin/;
+/{
+
+	fragment@2 {
+                target = <&pcdev3>;
+
+                __overlay__ {
+			status = "disabled";
+                };
+        };
+
+};

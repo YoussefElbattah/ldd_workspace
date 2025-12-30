@@ -10,21 +10,10 @@
 #include <linux/mod_devicetable.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/sysfs.h>
+#include "pcd_platform_driver_dt_sys.h"
 #undef pr_fmt
 #define pr_fmt(fmt) "%s :" fmt , __func__
-
-enum configs_names{
-	PCDEVA1X,
-	PCDEVB1X,
-	PCDEVC1X,
-	PCDEVD1X
-};
-
-struct device_config {
-	int address;
-	int com_speed;
-	int accuracy;
-};
 
 struct device_config dev_conf[] = {
 	
@@ -34,184 +23,8 @@ struct device_config dev_conf[] = {
 	{ },
 };
 
-struct pcdev_private_data {
-	struct pcdev_platform_data pdata;
-	dev_t dev_num;
-	char *buffer;
-	struct cdev cdev;
-};
-
-struct pcdrv_private_data {
-	int total_devices;
-	dev_t dev_num_base;
-	struct class *class_pcd;
-	struct device *device_pcd;
-};
 
 struct pcdrv_private_data pcdrv_data;
-
-int check_permission(int dev_perm, int acc_mode)
-{
-
-	if(dev_perm == RDWR)
-		return 0;
-	
-	//ensures readonly access
-	if( (dev_perm == RDONLY) && ( (acc_mode & FMODE_READ) && !(acc_mode & FMODE_WRITE) ) )
-		return 0;
-	
-	//ensures writeonly access
-	if( (dev_perm == WRONLY) && ( (acc_mode & FMODE_WRITE) && !(acc_mode & FMODE_READ) ) )
-		return 0;
-
-	return -EPERM;
-
-}
-
-
-loff_t pcd_lseek(struct file *filp, loff_t offset, int whence)
-{
-
-	struct pcdev_private_data *pcdev_data = (struct pcdev_private_data*)filp->private_data;
-
-	int max_size = pcdev_data->pdata.size;
-	
-	loff_t temp;
-
-	pr_info("lseek requested \n");
-	pr_info("Current value of the file position = %lld\n",filp->f_pos);
-
-	switch(whence)
-	{
-		case SEEK_SET:
-			if((offset > max_size) || (offset < 0))
-				return -EINVAL;
-			filp->f_pos = offset;
-			break;
-		case SEEK_CUR:
-			temp = filp->f_pos + offset;
-			if((temp > max_size) || (temp < 0))
-				return -EINVAL;
-			filp->f_pos = temp;
-			break;
-		case SEEK_END:
-			temp = max_size + offset;
-			if((temp > max_size) || (temp < 0))
-				return -EINVAL;
-			filp->f_pos = temp;
-			break;
-		default:
-			return -EINVAL;
-	}
-	
-	pr_info("New value of the file position = %lld\n",filp->f_pos);
-
-	return filp->f_pos;
-}
-
-ssize_t pcd_read(struct file *filp, char __user *buff, size_t count, loff_t *f_pos)
-{
-	struct pcdev_private_data *pcdev_data = (struct pcdev_private_data*)filp->private_data;
-
-	int max_size = pcdev_data->pdata.size;
-
-	pr_info("Read requested for %zu bytes \n",count);
-	pr_info("Current file position = %lld\n",*f_pos);
-
-	
-	/* Adjust the 'count' */
-	if((*f_pos + count) > max_size)
-		count = max_size - *f_pos;
-
-	/*copy to user */
-	if(copy_to_user(buff,pcdev_data->buffer+(*f_pos),count)){
-		return -EFAULT;
-	}
-
-	/*update the current file postion */
-	*f_pos += count;
-
-	pr_info("Number of bytes successfully read = %zu\n",count);
-	pr_info("Updated file position = %lld\n",*f_pos);
-
-	/*Return number of bytes which have been successfully read */
-	return count;
-
-}
-
-ssize_t pcd_write(struct file *filp, const char __user *buff, size_t count, loff_t *f_pos)
-{
-	struct pcdev_private_data *pcdev_data = (struct pcdev_private_data*)filp->private_data;
-
-	int max_size = pcdev_data->pdata.size;
-	
-	pr_info("Write requested for %zu bytes\n",count);
-	pr_info("Current file position = %lld\n",*f_pos);
-
-	
-	/* Adjust the 'count' */
-	if((*f_pos + count) > max_size)
-		count = max_size - *f_pos;
-
-	if(!count){
-		pr_err("No space left on the device \n");
-		return -ENOMEM;
-	}
-
-	/*copy from user */
-	if(copy_from_user(pcdev_data->buffer+(*f_pos),buff,count)){
-		return -EFAULT;
-	}
-
-	/*update the current file postion */
-	*f_pos += count;
-
-	pr_info("Number of bytes successfully written = %zu\n",count);
-	pr_info("Updated file position = %lld\n",*f_pos);
-
-	/*Return number of bytes which have been successfully written */
-	return count;
-
-}
-
-
-
-int pcd_open(struct inode *inode, struct file *filp)
-{
-
-	int ret;
-
-	int major_n, minor_n;
-	
-	struct pcdev_private_data *pcdev_data;
-
-	/*find out on which device file open was attempted by the user space */
-
-	minor_n = MINOR(inode->i_rdev);
-	major_n = MAJOR(inode->i_rdev);
-	pr_info("<major><minor> access = <%d><%d>\n",major_n,minor_n);
-
-	/*get device's private data structure */
-	pcdev_data = container_of(inode->i_cdev,struct pcdev_private_data,cdev);
-
-	/*to supply device private data to other methods of the driver */
-	filp->private_data = pcdev_data;
-		
-	/*check permission */
-	ret = check_permission(pcdev_data->pdata.perm,filp->f_mode);
-
-	(!ret)?pr_info("open was successful\n"):pr_info("open was unsuccessful\n");
-
-	return ret;
-}
-
-int pcd_release(struct inode *inode, struct file *flip)
-{
-	pr_info("release was successful\n");
-
-	return 0;
-}
-
 
 /* file operations of the driver */
 struct file_operations pcd_fops = {
@@ -223,6 +36,48 @@ struct file_operations pcd_fops = {
 	.owner = THIS_MODULE	
 };
 
+ssize_t max_size_show(struct device *dev, struct device_attribute *attr, char *buf){
+	/* get access to the device private data 
+	struct pcdev_platform_data *pdata = get_platform_data_dt(dev);
+        if(IS_ERR(pdata)){
+                return PTR_ERR(pdata);
+        }*/
+
+	/* sysfs 'dev' is the child from device_create(); private data is on dev->parent */
+	/* dev->parent == pdev->dev, which is where probe() stored the driver's private data */
+	struct pcdev_private_data *dev_data = dev_get_drvdata(dev->parent);
+	return sprintf(buf, "%d\n", dev_data->pdata.size); 
+}
+ssize_t max_size_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count){
+	long result;
+	int ret;
+	ret = kstrtol(buf, 10, &result);
+	struct pcdev_private_data *dev_data = dev_get_drvdata(dev->parent);
+	dev_data->pdata.size = result;
+
+	dev_data->buffer = krealloc(dev_data->buffer, dev_data->pdata.size, GFP_KERNEL);
+	return count ; 
+}
+
+ssize_t serial_num_show(struct device *dev, struct device_attribute *attr, char *buf){
+	
+	struct pcdev_private_data *dev_data = dev_get_drvdata(dev->parent);
+        return sprintf(buf, "%s\n", dev_data->pdata.serial_number);
+}
+
+/* Create 2 variables struct device_attribute */
+static DEVICE_ATTR(max_size, S_IRUGO|S_IWUSR, max_size_show, max_size_store);
+static DEVICE_ATTR(serial_num, S_IRUGO, serial_num_show, NULL);
+
+struct attribute *pcd_attrs[] = {
+	&dev_attr_max_size.attr,
+	&dev_attr_serial_num.attr,
+	NULL
+};
+
+struct attribute_group pcd_attr_group = {
+	.attrs = pcd_attrs
+};
 struct pcdev_platform_data* get_platform_data_dt(struct device *dev){
 
 	struct device_node *dev_node;
@@ -258,6 +113,20 @@ struct pcdev_platform_data* get_platform_data_dt(struct device *dev){
 }
 
 struct of_device_id youssef_pcdev_dt_match[];
+
+
+int pcd_sysfs_create_files(struct device *pcd_dev){
+
+	int ret;
+#if 0 
+	ret = sysfs_create_file(&pcd_dev->kobj, &dev_attr_max_size.attr);
+	if(ret < 0){
+		return ret;
+	}
+	return sysfs_create_file(&pcd_dev->kobj, &dev_attr_serial_num.attr);
+#endif 
+	return sysfs_create_group(&pcd_dev->kobj, &pcd_attr_group);
+}
 /* Gets called whenever there's a match with other devices*/
 int pcd_platform_driver_probe(struct platform_device *pdev){
 	
@@ -279,7 +148,7 @@ int pcd_platform_driver_probe(struct platform_device *pdev){
 	        }
 		driver_data = (int)match->data;
 	}else{
-		/* 1. Get platform data of device, to get it you should return to the file of pcd_device_setup.c and look at the structure platform_device */
+	/* 1. Get platform data of device, to get it you should return to the file of pcd_device_setup.c and look at the structure platform_device */
                 pdata = (struct pcdev_platform_data*)dev_get_platdata(&pdev->dev);
                 if(!pdata){
                         dev_err(&pdev->dev, "No platform data exists \n");
@@ -326,6 +195,12 @@ int pcd_platform_driver_probe(struct platform_device *pdev){
 		cdev_del(&device_data->cdev);
 	}
 	
+	ret = pcd_sysfs_create_files(pcdrv_data.device_pcd);
+
+	if(ret < 0){
+		device_destroy(pcdrv_data.class_pcd, device_data->dev_num);
+		return ret;
+	}
 	/* save the device private data pointer in the platform device structure */
 	dev_set_drvdata(&pdev->dev, device_data);
 
@@ -395,7 +270,7 @@ static int __init pcd_platform_driver_init(void){
 	}	
 	
 	/* create device class under sys/class/ */
-	pcdrv_data.class_pcd = class_create(THIS_MODULE,"pcd_class");
+	pcdrv_data.class_pcd = class_create("pcd_class");
         if(IS_ERR(pcdrv_data.class_pcd)){
                 pr_err("Class creation failed\n");
                 ret = PTR_ERR(pcdrv_data.class_pcd);// converts Pointer to Error code, ptr -> int
